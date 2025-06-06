@@ -14,13 +14,22 @@ GH_TOKEN = os.getenv("GH_TOKEN")         # ✅ Load GitHub Token
 GH_REPO = os.getenv("GH_REPO")           # ✅ Load GitHub Repo path
 
 
-# 🌍 50 global hot cities (balanced by region)
+# 🌍 10 global hot cities (balanced by region)
+
+
 HOT_CITIES = [
-    'NYC', 'LAX', 'SFO', 'MIA', 'LAS', 'SEA', 'BOS', 'ORD', 'ATL', 'DFW', 'YVR', 'YYZ',
-    'LHR', 'CDG', 'AMS', 'FRA', 'BCN', 'MAD', 'ROM', 'ATH', 'DUB', 'CPH', 'ZRH', 'PRG',
-    'DXB', 'DEL', 'BOM', 'SIN', 'ICN', 'TYO', 'HKG', 'BKK', 'MNL', 'KUL', 'DOH', 'TPE',
-    'MEX', 'CUN', 'GRU', 'EZE', 'SCL', 'BOG', 'CAI', 'JNB', 'CMN', 'SYD', 'AKL', 'TLV', 'IST', 'SAW'
+    'NYC',   # New York City
+    'LHR',   # London Heathrow
+    'DXB',   # Dubai
+    'TYO',   # Tokyo (Narita or Haneda)
+    'SIN',   # Singapore
+    'CDG',   # Paris Charles de Gaulle
+    'LAX',   # Los Angeles
+    'HND',   # Tokyo Haneda
+    'SYD',   # Sydney
+    'MIA'    # Miami
 ]
+
 
 # 🗓️ Date-based filename
 CURRENCY = 'usd'
@@ -66,14 +75,38 @@ def collect_flight_data():
                 except Exception as e:
                     print(f'❌ Error for {origin} → {destination}:', e)
 
+
 def push_to_github():
     try:
-        subprocess.run(['git', 'add', CSV_FILE], check=True)
-        subprocess.run(['git', 'commit', '-m', f'🛫 Daily snapshot for {today}'], check=True)
-        subprocess.run(['git', 'push'], check=True)
-        print('✅ Pushed to GitHub.')
+        gh_token = os.getenv("GH_TOKEN")
+        gh_repo = os.getenv("GH_REPO")
+        repo_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git"
+
+        # Create temporary folder for isolated git repo
+        folder = "temp_flight_data"
+        os.makedirs(folder, exist_ok=True)
+        dst = os.path.join(folder, CSV_FILE)
+
+        # Copy today's CSV file into the folder
+        import shutil
+        shutil.copyfile(CSV_FILE, dst)
+
+        # Git init and push
+        subprocess.run(["git", "init"], cwd=folder, check=True)
+        subprocess.run(["git", "config", "user.email", "action@github.com"], cwd=folder, check=True)
+        subprocess.run(["git", "config", "user.name", "Flight Bot"], cwd=folder, check=True)
+        subprocess.run(["git", "add", CSV_FILE], cwd=folder, check=True)
+        subprocess.run(["git", "commit", "-m", f"✅ Flight price snapshot {today}"], cwd=folder, check=True)
+        subprocess.run(["git", "branch", "-M", "main"], cwd=folder, check=True)
+        subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=folder, check=True)
+        subprocess.run(["git", "push", "-u", "origin", "main", "--force"], cwd=folder, check=True)
+
+        print("✅ CSV pushed to flight-price-data repo.")
     except Exception as e:
-        print('❌ Git push failed:', e)
+        print("❌ GitHub push failed:", e)
+
+
+
 
 if __name__ == "__main__":
     collect_flight_data()

@@ -15,11 +15,19 @@ MARKER = os.getenv("MARKER")
 GH_TOKEN = os.getenv("GH_TOKEN")         # ✅ GitHub Token
 GH_REPO = os.getenv("GH_REPO")           # ✅ GitHub Repo path (e.g. user/repo-name)
 
+
 # 🌍 Top 10 flight cities
 HOT_CITIES = [
     'NYC',  # New York
     'LHR',  # London Heathrow
-    
+    'DXB',  # Dubai
+    'TYO',  # Tokyo
+    'SIN',  # Singapore
+    'CDG',  # Paris
+    'LAX',  # Los Angeles
+    'HND',  # Tokyo Haneda
+    'SYD',  # Sydney
+    'MIA'   # Miami
 ]
 
 # 🗓️ Create filename

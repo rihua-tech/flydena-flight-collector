@@ -111,3 +111,7 @@ def push_to_github():
         print("✅ CSV pushed to flight-price-data repo.")
     except Exception as e:
         print("❌ GitHub push failed:", e)
+        
+if __name__ == "__main__":
+    collect_flight_data()
+    push_to_github()

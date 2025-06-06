@@ -80,6 +80,7 @@ def collect_flight_data():
 
 def push_to_github():
     try:
+        import shutil  # ✅ move this to top if you prefer
         gh_token = os.getenv("GH_TOKEN")
         gh_repo = os.getenv("GH_REPO")
         repo_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git"
@@ -89,13 +90,16 @@ def push_to_github():
         os.makedirs(folder, exist_ok=True)
         dst = os.path.join(folder, CSV_FILE)
 
-        # Copy file
-        import shutil
+        # Copy today's CSV file into the folder
         shutil.copyfile(CSV_FILE, dst)
 
-        # Init git and push
+        # 🧹 Clean up old git data if present
+        git_folder = os.path.join(folder, ".git")
+        if os.path.exists(git_folder):
+            shutil.rmtree(git_folder)
+
+        # ✅ Init git and push
         subprocess.run(["git", "init"], cwd=folder, check=True)
-        subprocess.run(["git", "remote", "remove", "origin"], cwd=folder, check=False)  # 🔧 safely remove if exists
         subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=folder, check=True)
         subprocess.run(["git", "config", "user.email", "action@github.com"], cwd=folder, check=True)
         subprocess.run(["git", "config", "user.name", "Flight Bot"], cwd=folder, check=True)

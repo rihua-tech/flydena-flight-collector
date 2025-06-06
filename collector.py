@@ -19,14 +19,7 @@ GH_REPO = os.getenv("GH_REPO")           # ✅ GitHub Repo path (e.g. user/repo-
 HOT_CITIES = [
     'NYC',  # New York
     'LHR',  # London Heathrow
-    'DXB',  # Dubai
-    'TYO',  # Tokyo
-    'SIN',  # Singapore
-    'CDG',  # Paris
-    'LAX',  # Los Angeles
-    'HND',  # Tokyo Haneda
-    'SYD',  # Sydney
-    'MIA'   # Miami
+    
 ]
 
 # 🗓️ Create filename
@@ -71,33 +64,43 @@ def collect_flight_data():
                 except Exception as e:
                     print(f'❌ Error for {origin} → {destination}:', e)
 
+
+
+import shutil
+import stat
+
+def remove_readonly(func, path, _):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
 def push_to_github():
     try:
-        import shutil
-        import stat
-
         gh_token = os.getenv("GH_TOKEN")
         gh_repo = os.getenv("GH_REPO")
         repo_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git"
 
         folder = "temp_flight_data"
-        if os.path.exists(folder):
-            shutil.rmtree(folder, onerror=lambda f, p, e: os.chmod(p, stat.S_IWRITE));  # force delete
 
-        # ✅ Clone the repo instead of reinitializing
+        # 🧹 Clean up old folder completely and safely
+        if os.path.exists(folder):
+            shutil.rmtree(folder, onerror=remove_readonly)
+
+        # ✅ Clone the repo
         subprocess.run(["git", "clone", repo_url, folder], check=True)
 
+        # 📄 Copy the new file into the repo
         dst = os.path.join(folder, CSV_FILE)
         shutil.copyfile(CSV_FILE, dst)
 
+        # ✅ Add, commit, and push
         subprocess.run(["git", "add", CSV_FILE], cwd=folder, check=True)
         subprocess.run(["git", "commit", "-m", f"✅ Add snapshot {today}"], cwd=folder, check=True)
         subprocess.run(["git", "push"], cwd=folder, check=True)
 
         print("✅ CSV pushed and previous files kept.")
+
     except Exception as e:
         print("❌ GitHub push failed:", e)
-
 
 
 # ▶️ Run both steps

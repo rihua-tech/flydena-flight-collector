@@ -73,36 +73,32 @@ def collect_flight_data():
 
 def push_to_github():
     try:
+        import shutil
+        import stat
+
         gh_token = os.getenv("GH_TOKEN")
         gh_repo = os.getenv("GH_REPO")
         repo_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git"
 
         folder = "temp_flight_data"
-        os.makedirs(folder, exist_ok=True)
+        if os.path.exists(folder):
+            shutil.rmtree(folder, onerror=lambda f, p, e: os.chmod(p, stat.S_IWRITE));  # force delete
+
+        # ✅ Clone the repo instead of reinitializing
+        subprocess.run(["git", "clone", repo_url, folder], check=True)
+
         dst = os.path.join(folder, CSV_FILE)
         shutil.copyfile(CSV_FILE, dst)
 
-        # 🧹 Remove old .git folder safely on Windows
-        git_folder = os.path.join(folder, ".git")
-        def remove_readonly(func, path, _):
-            os.chmod(path, stat.S_IWRITE)
-            func(path)
-        if os.path.exists(git_folder):
-            shutil.rmtree(git_folder, onerror=remove_readonly)
-
-        # 🧠 Push to GitHub
-        subprocess.run(["git", "init"], cwd=folder, check=True)
-        subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=folder, check=True)
-        subprocess.run(["git", "config", "user.email", "action@github.com"], cwd=folder, check=True)
-        subprocess.run(["git", "config", "user.name", "Flight Bot"], cwd=folder, check=True)
         subprocess.run(["git", "add", CSV_FILE], cwd=folder, check=True)
-        subprocess.run(["git", "commit", "-m", f"✅ Flight price snapshot {today}"], cwd=folder, check=True)
-        subprocess.run(["git", "branch", "-M", "main"], cwd=folder, check=True)
-        subprocess.run(["git", "push", "-u", "origin", "main", "--force"], cwd=folder, check=True)
+        subprocess.run(["git", "commit", "-m", f"✅ Add snapshot {today}"], cwd=folder, check=True)
+        subprocess.run(["git", "push"], cwd=folder, check=True)
 
-        print("✅ CSV pushed to flight-price-data repo.")
+        print("✅ CSV pushed and previous files kept.")
     except Exception as e:
         print("❌ GitHub push failed:", e)
+
+
 
 # ▶️ Run both steps
 if __name__ == "__main__":

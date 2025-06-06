@@ -76,38 +76,34 @@ def collect_flight_data():
                     print(f'❌ Error for {origin} → {destination}:', e)
 
 
+
+
 def push_to_github():
     try:
         gh_token = os.getenv("GH_TOKEN")
         gh_repo = os.getenv("GH_REPO")
         repo_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git"
 
-        # Create temporary folder for isolated git repo
+        # Create temp folder
         folder = "temp_flight_data"
         os.makedirs(folder, exist_ok=True)
         dst = os.path.join(folder, CSV_FILE)
 
-        # Copy today's CSV file into the folder
+        # Copy file
         import shutil
         shutil.copyfile(CSV_FILE, dst)
 
-        # Git init and push
+        # Init git and push
         subprocess.run(["git", "init"], cwd=folder, check=True)
+        subprocess.run(["git", "remote", "remove", "origin"], cwd=folder, check=False)  # 🔧 safely remove if exists
+        subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=folder, check=True)
         subprocess.run(["git", "config", "user.email", "action@github.com"], cwd=folder, check=True)
         subprocess.run(["git", "config", "user.name", "Flight Bot"], cwd=folder, check=True)
         subprocess.run(["git", "add", CSV_FILE], cwd=folder, check=True)
         subprocess.run(["git", "commit", "-m", f"✅ Flight price snapshot {today}"], cwd=folder, check=True)
         subprocess.run(["git", "branch", "-M", "main"], cwd=folder, check=True)
-        subprocess.run(["git", "remote", "add", "origin", repo_url], cwd=folder, check=True)
         subprocess.run(["git", "push", "-u", "origin", "main", "--force"], cwd=folder, check=True)
 
         print("✅ CSV pushed to flight-price-data repo.")
     except Exception as e:
         print("❌ GitHub push failed:", e)
-
-
-
-
-if __name__ == "__main__":
-    collect_flight_data()
-    push_to_github()

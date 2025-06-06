@@ -1,22 +1,21 @@
 
 import os
-import csv
-import time
-import stat
-import shutil
 import requests
-import subprocess
+import csv
 from datetime import datetime
 from dotenv import load_dotenv
+import time
+import subprocess
+import shutil
+import stat
 
 # 🔐 Load token from .env
 load_dotenv()
 MARKER = os.getenv("MARKER")
-GH_TOKEN = os.getenv("GH_TOKEN")         # ✅ GitHub Token
-GH_REPO = os.getenv("GH_REPO")           # ✅ GitHub Repo path (e.g. user/repo-name)
+GH_TOKEN = os.getenv("GH_TOKEN")
+GH_REPO = os.getenv("GH_REPO")
 
-
-# 🌍 Top 10 flight cities
+# 🌍 10 global hot cities (balanced by region)
 HOT_CITIES = [
     'NYC',  # New York
     'LHR',  # London Heathrow
@@ -27,14 +26,15 @@ HOT_CITIES = [
     'LAX',  # Los Angeles
     'HND',  # Tokyo Haneda
     'SYD',  # Sydney
-    'MIA'   # Miami
+    'MIA',  # Miami
 ]
 
-# 🗓️ Create filename
+# 🗓️ Date-based filename
 CURRENCY = 'usd'
 today = datetime.today().strftime('%Y-%m-%d')
 CSV_FILE = f'flight_prices_{today}.csv'
 PERIOD = datetime.today().strftime('%Y-%m')
+
 
 def collect_flight_data():
     with open(CSV_FILE, mode='w', newline='', encoding='utf-8') as file:
@@ -52,6 +52,7 @@ def collect_flight_data():
                     f'&beginning_of_period={PERIOD}&period_type=month&one_way=true'
                     f'&market=us&token={MARKER}'
                 )
+
                 try:
                     response = requests.get(url, timeout=10)
                     result = response.json()
@@ -67,19 +68,12 @@ def collect_flight_data():
                             print(f'✅ {origin} → {destination} on {item["depart_date"]} = ${item["value"]}')
                     else:
                         print(f'⚠️ No price for {origin} → {destination}')
+
                     time.sleep(0.7)
 
                 except Exception as e:
                     print(f'❌ Error for {origin} → {destination}:', e)
 
-
-
-import shutil
-import stat
-
-def remove_readonly(func, path, _):
-    os.chmod(path, stat.S_IWRITE)
-    func(path)
 
 def push_to_github():
     try:
@@ -89,24 +83,23 @@ def push_to_github():
 
         folder = "temp_flight_data"
 
-        # 🧹 Clean up old folder completely and safely
+        # 🔁 Clean up old clone
         if os.path.exists(folder):
-            shutil.rmtree(folder, onerror=remove_readonly)
+            shutil.rmtree(folder, onerror=lambda f, p, e: os.chmod(p, stat.S_IWRITE))
 
-        # ✅ Clone the repo
+        # ✅ Clone repo to temp folder
         subprocess.run(["git", "clone", repo_url, folder], check=True)
 
-        # 📄 Copy the new file into the repo
+        # 📁 Copy today’s CSV into repo
         dst = os.path.join(folder, CSV_FILE)
         shutil.copyfile(CSV_FILE, dst)
 
-        # ✅ Add, commit, and push
+        # 🟢 Commit & Push
         subprocess.run(["git", "add", CSV_FILE], cwd=folder, check=True)
         subprocess.run(["git", "commit", "-m", f"✅ Add snapshot {today}"], cwd=folder, check=True)
         subprocess.run(["git", "push"], cwd=folder, check=True)
 
         print("✅ CSV pushed and previous files kept.")
-
     except Exception as e:
         print("❌ GitHub push failed:", e)
 

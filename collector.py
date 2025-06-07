@@ -1,19 +1,17 @@
-
-
 #!/usr/bin/env python3
 import os, csv, shutil, subprocess
 from datetime import date, datetime, timedelta
 import requests
 from dotenv import load_dotenv
 
-# ── CONFIGURE ────────────────────────────────────────────────────────────────────
+# ── CONFIGURE ───────────────────────────────────────────────────────────────────
 load_dotenv()
-API_TOKEN = os.getenv("MARKER")
-GH_TOKEN  = os.getenv("GH_TOKEN")
-GH_REPO   = os.getenv("GH_REPO")      # e.g. "youruser/flight-price-data"
-CLONE_DIR = "temp_flight_data"
-CURRENCY  = "usd"
-MARKET    = "us"
+API_TOKEN  = os.getenv("MARKER")
+GH_TOKEN   = os.getenv("GH_TOKEN")
+GH_REPO    = os.getenv("GH_REPO")      # e.g. "youruser/flight-price-data"
+CLONE_DIR  = "temp_flight_data"
+CURRENCY   = "usd"
+MARKET     = "us"
 DAYS_AHEAD = 100
 
 HOT_CITIES = [
@@ -21,15 +19,24 @@ HOT_CITIES = [
     "CDG","LAX","HND","SYD","MIA",
 ]
 
+
 # ── STEP 1: COLLECT ──────────────────────────────────────────────────────────────
 def collect_flight_data(days_ahead=DAYS_AHEAD):
-    today   = date.today()
-    cutoff  = today + timedelta(days=days_ahead)
-    csvname = f"flight_prices_{today.isoformat()}.csv"
+    today       = date.today()
+    search_date = today.isoformat()
+    cutoff      = today + timedelta(days=days_ahead)
+    csvname     = f"flight_prices_{search_date}.csv"
 
     with open(csvname, "w", newline="", encoding="utf-8") as fp:
         w = csv.writer(fp)
-        w.writerow(["origin","destination","depart_date","price"])
+        # include search_date in header
+        w.writerow([
+            "origin",
+            "destination",
+            "search_date",
+            "depart_date",
+            "price"
+        ])
 
         for origin in HOT_CITIES:
             for dest in HOT_CITIES:
@@ -51,13 +58,21 @@ def collect_flight_data(days_ahead=DAYS_AHEAD):
                         for item in r["data"]:
                             dep = datetime.fromisoformat(item["depart_date"]).date()
                             if dep <= cutoff:
-                                w.writerow([origin, dest, dep.isoformat(), item["value"]])
+                                # prepend search_date on each row
+                                w.writerow([
+                                    origin,
+                                    dest,
+                                    search_date,
+                                    dep.isoformat(),
+                                    item["value"]
+                                ])
                     else:
                         print("  ⚠️ no data")
                 except Exception as e:
                     print("  ❌", e)
 
     return csvname
+
 
 # ── STEP 2: PUSH ─────────────────────────────────────────────────────────────────
 def push_to_github(csvfile):
@@ -91,6 +106,7 @@ def push_to_github(csvfile):
     )
     subprocess.run(["git", "-C", CLONE_DIR, "push"], check=True)
     print("✅ pushed")
+
 
 # ── MAIN ─────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":

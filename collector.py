@@ -1,110 +1,98 @@
 
-import os
+
+#!/usr/bin/env python3
+import os, csv, shutil, subprocess
+from datetime import date, datetime, timedelta
 import requests
-import csv
-from datetime import datetime
 from dotenv import load_dotenv
-import time
-import subprocess
-import shutil
-import stat
 
-# 🔐 Load token from .env
+# ── CONFIGURE ────────────────────────────────────────────────────────────────────
 load_dotenv()
-MARKER = os.getenv("MARKER")
-GH_TOKEN = os.getenv("GH_TOKEN")
-GH_REPO = os.getenv("GH_REPO")
+API_TOKEN = os.getenv("MARKER")
+GH_TOKEN  = os.getenv("GH_TOKEN")
+GH_REPO   = os.getenv("GH_REPO")      # e.g. "youruser/flight-price-data"
+CLONE_DIR = "temp_flight_data"
+CURRENCY  = "usd"
+MARKET    = "us"
+DAYS_AHEAD = 100
 
-# 🌍 10 global hot cities (balanced by region)
 HOT_CITIES = [
-    'NYC',  # New York
-    'LHR',  # London Heathrow
-    'DXB',  # Dubai
-    'TYO',  # Tokyo
-    'SIN',  # Singapore
-    'CDG',  # Paris
-    'LAX',  # Los Angeles
-    'HND',  # Tokyo Haneda
-    'SYD',  # Sydney
-    'MIA',  # Miami
+    "NYC","LHR","DXB","TYO","SIN",
+    "CDG","LAX","HND","SYD","MIA",
 ]
 
-# 🗓️ Date-based filename
-CURRENCY = 'usd'
-today = datetime.today().strftime('%Y-%m-%d')
-CSV_FILE = f'flight_prices_{today}.csv'
-PERIOD = datetime.today().strftime('%Y-%m')
+# ── STEP 1: COLLECT ──────────────────────────────────────────────────────────────
+def collect_flight_data(days_ahead=DAYS_AHEAD):
+    today   = date.today()
+    cutoff  = today + timedelta(days=days_ahead)
+    csvname = f"flight_prices_{today.isoformat()}.csv"
 
-
-def collect_flight_data():
-    with open(CSV_FILE, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
-        writer.writerow(['From', 'To', 'Depart_Date', 'Price'])
+    with open(csvname, "w", newline="", encoding="utf-8") as fp:
+        w = csv.writer(fp)
+        w.writerow(["origin","destination","depart_date","price"])
 
         for origin in HOT_CITIES:
-            for destination in HOT_CITIES:
-                if origin == destination:
+            for dest in HOT_CITIES:
+                if origin == dest:
                     continue
-                print(f'📡 Querying {origin} → {destination}')
+
+                print(f"📡 {origin}→{dest}")
                 url = (
-                    f'https://api.travelpayouts.com/aviasales/v3/get_latest_prices'
-                    f'?currency={CURRENCY}&origin={origin}&destination={destination}'
-                    f'&beginning_of_period={PERIOD}&period_type=month&one_way=true'
-                    f'&market=us&token={MARKER}'
+                    "https://api.travelpayouts.com/aviasales/v3/get_latest_prices"
+                    f"?origin={origin}&destination={dest}"
+                    f"&currency={CURRENCY}&market={MARKET}"
+                    "&period_type=year"
+                    f"&token={API_TOKEN}"
                 )
 
                 try:
-                    response = requests.get(url, timeout=10)
-                    result = response.json()
-
-                    if result.get('success') and result.get('data'):
-                        for item in result['data']:
-                            writer.writerow([
-                                item.get('origin', origin),
-                                item.get('destination', destination),
-                                item.get('depart_date'),
-                                item.get('value')
-                            ])
-                            print(f'✅ {origin} → {destination} on {item["depart_date"]} = ${item["value"]}')
+                    r = requests.get(url, timeout=10).json()
+                    if r.get("success") and r.get("data"):
+                        for item in r["data"]:
+                            dep = datetime.fromisoformat(item["depart_date"]).date()
+                            if dep <= cutoff:
+                                w.writerow([origin, dest, dep.isoformat(), item["value"]])
                     else:
-                        print(f'⚠️ No price for {origin} → {destination}')
-
-                    time.sleep(0.7)
-
+                        print("  ⚠️ no data")
                 except Exception as e:
-                    print(f'❌ Error for {origin} → {destination}:', e)
+                    print("  ❌", e)
 
+    return csvname
 
-def push_to_github():
-    try:
-        gh_token = os.getenv("GH_TOKEN")
-        gh_repo = os.getenv("GH_REPO")
-        repo_url = f"https://x-access-token:{gh_token}@github.com/{gh_repo}.git"
+# ── STEP 2: PUSH ─────────────────────────────────────────────────────────────────
+def push_to_github(csvfile):
+    repo_url = f"https://x-access-token:{GH_TOKEN}@github.com/{GH_REPO}.git"
 
-        folder = "temp_flight_data"
+    # clone or pull
+    if os.path.isdir(os.path.join(CLONE_DIR, ".git")):
+        subprocess.run(["git", "-C", CLONE_DIR, "pull"], check=True)
+    else:
+        shutil.rmtree(CLONE_DIR, ignore_errors=True)
+        subprocess.run(["git", "clone", repo_url, CLONE_DIR], check=True)
 
-        # 🔁 Clean up old clone
-        if os.path.exists(folder):
-            shutil.rmtree(folder, onerror=lambda f, p, e: os.chmod(p, stat.S_IWRITE))
+    # copy in the CSV
+    dst = os.path.join(CLONE_DIR, csvfile)
+    shutil.copy2(csvfile, dst)
 
-        # ✅ Clone repo to temp folder
-        subprocess.run(["git", "clone", repo_url, folder], check=True)
+    # commit only if there are changes
+    status = subprocess.run(
+        ["git", "-C", CLONE_DIR, "status", "--porcelain"],
+        stdout=subprocess.PIPE, text=True, check=True
+    ).stdout.strip()
 
-        # 📁 Copy today’s CSV into repo
-        dst = os.path.join(folder, CSV_FILE)
-        shutil.copyfile(CSV_FILE, dst)
+    if not status:
+        print("ℹ️  nothing to commit")
+        return
 
-        # 🟢 Commit & Push
-        subprocess.run(["git", "add", CSV_FILE], cwd=folder, check=True)
-        subprocess.run(["git", "commit", "-m", f"✅ Add snapshot {today}"], cwd=folder, check=True)
-        subprocess.run(["git", "push"], cwd=folder, check=True)
+    subprocess.run(["git", "-C", CLONE_DIR, "add", csvfile], check=True)
+    subprocess.run(
+        ["git", "-C", CLONE_DIR, "commit", "-m", f"📆 add {csvfile}"],
+        check=True
+    )
+    subprocess.run(["git", "-C", CLONE_DIR, "push"], check=True)
+    print("✅ pushed")
 
-        print("✅ CSV pushed and previous files kept.")
-    except Exception as e:
-        print("❌ GitHub push failed:", e)
-
-
-# ▶️ Run both steps
+# ── MAIN ─────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    collect_flight_data()
-    push_to_github()
+    csvfile = collect_flight_data()
+    push_to_github(csvfile)

@@ -1,11 +1,19 @@
 
+
+# render.yaml  (in the root of flydena-flight-collector)
 services:
   - type: cron
     name: flight-price-collector
     runtime: python
-    schedule: "0 9 * * *"  # Runs daily at 9:00 UTC
+    repo: https://github.com/rihua-tech/flydena-flight-collector.git
+    branch: main
+    schedule: "0 9 * * *"       # runs daily at 09:00 UTC
     buildCommand: pip install -r requirements.txt
     startCommand: python collector.py
     envVars:
       - key: MARKER
-        sync: false  # Use Render's dashboard to set this
+        sync: false            # set in the Render dashboard
+      - key: GH_TOKEN
+        sync: false
+      - key: GH_REPO
+        value: rihua-tech/flight-price-data

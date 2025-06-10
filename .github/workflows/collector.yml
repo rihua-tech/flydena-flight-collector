@@ -26,9 +26,13 @@ jobs:
 
     - name: Run collector script
       env:
-        TRAVELPAYOUTS_API_KEY: ${{ secrets.TRAVELPAYOUTS_API_KEY }}
+        MARKER: ${{ secrets.MARKER }}
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        GH_REPO: ${{ secrets.GH_REPO }}
       run: |
-        echo "API_KEY=$TRAVELPAYOUTS_API_KEY" > .env
+        echo "MARKER=$MARKER" > .env
+        echo "GH_TOKEN=$GH_TOKEN" >> .env
+        echo "GH_REPO=$GH_REPO" >> .env
         python collector.py
 
     - name: Commit and push new CSV

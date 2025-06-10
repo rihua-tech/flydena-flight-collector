@@ -1,0 +1,66 @@
+name: Daily Flight Collector
+
+on:
+  schedule:
+    - cron: '0 8 * * *'   # Daily at 08:00 UTC
+  workflow_dispatch:      # Manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Cache pip
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run collector script
+        env:
+          TRAVELPAYOUTS_API_KEY: ${{ secrets.TRAVELPAYOUTS_API_KEY }}
+          # GH_TOKEN/GH_REPO not needed inside script if script no longer pushes
+          # But if script had logic requiring GH_TOKEN/GH_REPO, you could pass:
+          # GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GH_REPO:  ${{ github.repository }}
+        run: |
+          echo "Running collector.py..."
+          python collector.py
+
+      - name: Debug current repo status
+        run: |
+          echo "Contents of temp_flight_data/:"
+          ls -lah temp_flight_data || echo "(directory not found)"
+          git status
+
+      - name: Commit and push new CSV
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          # Stage any new/changed CSVs
+          git add temp_flight_data/*.csv
+          # Commit only if there are changes
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "📆 Daily flight data: $(date +'%Y-%m-%d')"
+            git push
+          fi

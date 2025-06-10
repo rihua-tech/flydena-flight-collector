@@ -1,10 +1,16 @@
 name: Daily Flight Collector
 
+
 on:
   schedule:
-    - cron: '3 21 * * *'  # Daily at 21:03 UTC
+    - cron: '*/5 * * * *'  # Every 5 minutes
   workflow_dispatch:
 
+
+#on:
+ # schedule:
+  #  - cron: '3 21 * * *'  # Daily at 21:03 UTC
+  #workflow_dispatch:
 jobs:
   run-script:
     runs-on: ubuntu-latest

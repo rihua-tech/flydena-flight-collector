@@ -38,12 +38,12 @@ jobs:
         echo "MARKER=$MARKER" >> .env
         python collector.py
 
- -  name: Debug current repo status
+    - name: Debug current repo status
   run: |
     git status
     git remote -v
     ls -lah temp_flight_data
-
+    
 
     - name: Commit and push new CSV
       run: |
